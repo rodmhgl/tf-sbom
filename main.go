@@ -319,59 +319,42 @@ func exportXML(sbom *SBOM, writer io.Writer) error {
 	return nil
 }
 
-// exportCSV exports SBOM as CSV to the provided writer
-func exportCSV(sbom *SBOM, writer io.Writer) error {
+// exportDelimited exports SBOM as delimited values to the provided writer
+func exportDelimited(sbom *SBOM, writer io.Writer, separator rune, formatName string) error {
 	csvWriter := csv.NewWriter(writer)
-	defer func() {
-		csvWriter.Flush()
-		if err := csvWriter.Error(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to flush CSV writer: %v\n", err)
-		}
-	}()
+	csvWriter.Comma = separator
 
 	// Write header row
 	headers := []string{"Name", "Source", "Version", "Location"}
 	if err := csvWriter.Write(headers); err != nil {
-		return fmt.Errorf("failed to write CSV headers: %w", err)
+		return fmt.Errorf("failed to write %s headers: %w", formatName, err)
 	}
 
 	// Write data rows
 	for _, module := range sbom.Modules {
 		record := []string{module.Name, module.Source, module.Version, module.Location}
 		if err := csvWriter.Write(record); err != nil {
-			return fmt.Errorf("failed to write CSV record: %w", err)
+			return fmt.Errorf("failed to write %s record: %w", formatName, err)
 		}
+	}
+
+	// Flush and check for errors
+	csvWriter.Flush()
+	if err := csvWriter.Error(); err != nil {
+		return fmt.Errorf("failed to flush %s writer: %w", formatName, err)
 	}
 
 	return nil
 }
 
+// exportCSV exports SBOM as CSV to the provided writer
+func exportCSV(sbom *SBOM, writer io.Writer) error {
+	return exportDelimited(sbom, writer, ',', "CSV")
+}
+
 // exportTSV exports SBOM as TSV (tab-separated values) to the provided writer
 func exportTSV(sbom *SBOM, writer io.Writer) error {
-	csvWriter := csv.NewWriter(writer)
-	csvWriter.Comma = '\t' // Use tab separator for TSV
-	defer func() {
-		csvWriter.Flush()
-		if err := csvWriter.Error(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to flush TSV writer: %v\n", err)
-		}
-	}()
-
-	// Write header row
-	headers := []string{"Name", "Source", "Version", "Location"}
-	if err := csvWriter.Write(headers); err != nil {
-		return fmt.Errorf("failed to write TSV headers: %w", err)
-	}
-
-	// Write data rows
-	for _, module := range sbom.Modules {
-		record := []string{module.Name, module.Source, module.Version, module.Location}
-		if err := csvWriter.Write(record); err != nil {
-			return fmt.Errorf("failed to write TSV record: %w", err)
-		}
-	}
-
-	return nil
+	return exportDelimited(sbom, writer, '\t', "TSV")
 }
 
 // generateOutputFilename creates appropriate output filename based on format and base output path
