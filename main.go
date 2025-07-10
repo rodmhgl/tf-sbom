@@ -322,7 +322,12 @@ func exportXML(sbom *SBOM, writer io.Writer) error {
 // exportCSV exports SBOM as CSV to the provided writer
 func exportCSV(sbom *SBOM, writer io.Writer) error {
 	csvWriter := csv.NewWriter(writer)
-	defer csvWriter.Flush()
+	defer func() {
+		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to flush CSV writer: %v\n", err)
+		}
+	}()
 
 	// Write header row
 	headers := []string{"Name", "Source", "Version", "Location"}
@@ -345,7 +350,12 @@ func exportCSV(sbom *SBOM, writer io.Writer) error {
 func exportTSV(sbom *SBOM, writer io.Writer) error {
 	csvWriter := csv.NewWriter(writer)
 	csvWriter.Comma = '\t' // Use tab separator for TSV
-	defer csvWriter.Flush()
+	defer func() {
+		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to flush TSV writer: %v\n", err)
+		}
+	}()
 
 	// Write header row
 	headers := []string{"Name", "Source", "Version", "Location"}
