@@ -69,19 +69,19 @@ func validateTerraformDirectory(path string) error {
 // findTerraformModules recursively searches for directories containing Terraform files
 func findTerraformModules(root string, recursive bool) ([]string, error) {
 	if !recursive {
-		// Non-recursive mode: just return the root directory if it has .tf files
+		// Non-recursive mode: return the root directory if it has .tf files, otherwise return an empty slice
 		if hasTerraformFiles(root) {
 			return []string{root}, nil
 		}
-		return []string{root}, nil // Return root even if no .tf files for backward compatibility
+		return []string{}, nil // Return an empty slice if no .tf files are found
 	}
 
 	var modules []string
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() && hasTerraformFiles(path) {
+		if d.IsDir() && hasTerraformFiles(path) {
 			modules = append(modules, path)
 		}
 		return nil
