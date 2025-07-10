@@ -1489,13 +1489,13 @@ func TestExportSBOM(t *testing.T) {
 			t.Error("exportSBOM() = nil, want error for unsupported format")
 		}
 
-		expectedError := "unsupported format: yaml (supported: json, xml, spdx, cyclonedx)"
+		expectedError := "unsupported format: yaml (supported: json, xml, csv, tsv, spdx, cyclonedx)"
 		if err.Error() != expectedError {
 			t.Errorf("error message = %v, want %v", err.Error(), expectedError)
 		}
 	})
 
-	t.Run("unsupported format csv", func(t *testing.T) {
+	t.Run("csv format", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "test_export_*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
@@ -1504,13 +1504,32 @@ func TestExportSBOM(t *testing.T) {
 
 		outputPath := filepath.Join(tmpDir, "sbom.csv")
 		err = exportSBOM(testSBOM, "csv", outputPath)
-		if err == nil {
-			t.Error("exportSBOM() = nil, want error for unsupported format")
+		if err != nil {
+			t.Errorf("exportSBOM() failed: %v", err)
 		}
 
-		expectedError := "unsupported format: csv (supported: json, xml, spdx, cyclonedx)"
-		if err.Error() != expectedError {
-			t.Errorf("error message = %v, want %v", err.Error(), expectedError)
+		// Verify file was created
+		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+			t.Error("CSV file was not created")
+		}
+	})
+
+	t.Run("tsv format", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_export_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		outputPath := filepath.Join(tmpDir, "sbom.tsv")
+		err = exportSBOM(testSBOM, "tsv", outputPath)
+		if err != nil {
+			t.Errorf("exportSBOM() failed: %v", err)
+		}
+
+		// Verify file was created
+		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+			t.Error("TSV file was not created")
 		}
 	})
 
