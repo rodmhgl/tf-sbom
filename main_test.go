@@ -193,6 +193,127 @@ func TestSBOMSerialization(t *testing.T) {
 	})
 }
 
+// testDirSetup represents the setup for a test directory
+type testDirSetup struct {
+	name        string
+	recursive   bool
+	expectError bool
+	expectCount int
+	files       map[string]string      // filename -> content
+	subdirs     []string               // subdirectory paths to create
+	permissions map[string]os.FileMode // path -> permission (for permission tests)
+	setup       func(string) error     // custom setup function
+}
+
+// createTestDir creates a temporary directory with the specified setup
+func createTestDir(t *testing.T, setup testDirSetup) (string, func()) {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp("", "test_terraform_*")
+	if err != nil {
+		t.Fatalf("failed to create temp directory: %v", err)
+	}
+
+	cleanup := func() {
+		// Restore permissions before cleanup
+		for path, perm := range setup.permissions {
+			if perm == 0 {
+				os.Chmod(filepath.Join(tmpDir, path), 0755)
+			}
+		}
+		os.RemoveAll(tmpDir)
+	}
+
+	// Create subdirectories
+	for _, subdir := range setup.subdirs {
+		err = os.MkdirAll(filepath.Join(tmpDir, subdir), 0755)
+		if err != nil {
+			cleanup()
+			t.Fatalf("failed to create subdirectory %s: %v", subdir, err)
+		}
+	}
+
+	// Create files
+	for filename, content := range setup.files {
+		filePath := filepath.Join(tmpDir, filename)
+		dir := filepath.Dir(filePath)
+		if dir != tmpDir {
+			err = os.MkdirAll(dir, 0755)
+			if err != nil {
+				cleanup()
+				t.Fatalf("failed to create directory for file %s: %v", filename, err)
+			}
+		}
+		err = os.WriteFile(filePath, []byte(content), 0644)
+		if err != nil {
+			cleanup()
+			t.Fatalf("failed to create file %s: %v", filename, err)
+		}
+	}
+
+	// Apply permissions
+	for path, perm := range setup.permissions {
+		err = os.Chmod(filepath.Join(tmpDir, path), perm)
+		if err != nil {
+			cleanup()
+			t.Fatalf("failed to change permissions for %s: %v", path, err)
+		}
+	}
+
+	// Run custom setup
+	if setup.setup != nil {
+		err = setup.setup(tmpDir)
+		if err != nil {
+			cleanup()
+			t.Fatalf("custom setup failed: %v", err)
+		}
+	}
+
+	return tmpDir, cleanup
+}
+
+// validateSBOM validates the basic structure of an SBOM
+func validateSBOM(t *testing.T, sbom *SBOM, expectedModuleCount int) {
+	t.Helper()
+
+	if len(sbom.Modules) != expectedModuleCount {
+		t.Errorf("len(sbom.Modules) = %v, want %v", len(sbom.Modules), expectedModuleCount)
+	}
+
+	if sbom.Version != "1.0" {
+		t.Errorf("sbom.Version = %v, want '1.0'", sbom.Version)
+	}
+	if sbom.Tool != "terraform-sbom" {
+		t.Errorf("sbom.Tool = %v, want 'terraform-sbom'", sbom.Tool)
+	}
+	if sbom.Generated == "" {
+		t.Error("sbom.Generated should not be empty")
+	}
+}
+
+// captureStderr captures stderr output during a function execution
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stderr = w
+
+	fn()
+
+	w.Close()
+	os.Stderr = origStderr
+
+	output := make([]byte, 1024)
+	n, _ := r.Read(output)
+	r.Close()
+
+	return string(output[:n])
+}
+
 func TestGenerateSBOM(t *testing.T) {
 	// Test with non-existing directory
 	t.Run("non-existing directory", func(t *testing.T) {
