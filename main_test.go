@@ -196,7 +196,7 @@ func TestSBOMSerialization(t *testing.T) {
 func TestGenerateSBOM(t *testing.T) {
 	// Test with non-existing directory
 	t.Run("non-existing directory", func(t *testing.T) {
-		_, err := generateSBOM("/path/that/does/not/exist")
+		_, err := generateSBOM("/path/that/does/not/exist", false)
 		if err == nil {
 			t.Error("generateSBOM() = nil, want error")
 		}
@@ -210,7 +210,7 @@ func TestGenerateSBOM(t *testing.T) {
 		}
 		defer os.RemoveAll(tmpDir)
 
-		sbom, err := generateSBOM(tmpDir)
+		sbom, err := generateSBOM(tmpDir, false)
 		if err != nil {
 			t.Fatalf("generateSBOM() = %v, want nil", err)
 		}
@@ -252,7 +252,7 @@ module "security_group" {
 			t.Fatalf("failed to write config file: %v", err)
 		}
 
-		sbom, err := generateSBOM(tmpDir)
+		sbom, err := generateSBOM(tmpDir, false)
 		if err != nil {
 			t.Fatalf("generateSBOM() = %v, want nil", err)
 		}
@@ -299,7 +299,7 @@ module "broken" {
 			t.Fatalf("failed to write config file: %v", err)
 		}
 
-		_, err = generateSBOM(tmpDir)
+		_, err = generateSBOM(tmpDir, false)
 		if err == nil {
 			t.Error("generateSBOM() = nil, want error for invalid configuration")
 		}
@@ -339,7 +339,7 @@ module "no_version_module" {
 			t.Fatalf("failed to write config file: %v", err)
 		}
 
-		sbom, err := generateSBOM(tmpDir)
+		sbom, err := generateSBOM(tmpDir, false)
 		if err != nil {
 			t.Fatalf("generateSBOM() = %v, want nil", err)
 		}
@@ -428,7 +428,7 @@ module "long_module_name_with_many_underscores_and_dashes" {
 			t.Fatalf("failed to write config file: %v", err)
 		}
 
-		sbom, err := generateSBOM(tmpDir)
+		sbom, err := generateSBOM(tmpDir, false)
 		if err != nil {
 			t.Fatalf("generateSBOM() = %v, want nil", err)
 		}
@@ -476,7 +476,7 @@ resource "aws_instance" "example" {
 			t.Fatalf("failed to write to temp file: %v", err)
 		}
 
-		_, err = generateSBOM(tmpFile.Name())
+		_, err = generateSBOM(tmpFile.Name(), false)
 		if err == nil {
 			t.Error("generateSBOM() = nil, want error for file instead of directory")
 		}

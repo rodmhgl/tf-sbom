@@ -35,6 +35,20 @@ type SBOM struct {
 	Modules   []ModuleInfo `json:"modules" xml:"Modules>Module"`
 }
 
+// hasTerraformFiles checks if a directory contains any .tf files
+func hasTerraformFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tf") {
+			return true
+		}
+	}
+	return false
+}
+
 // validateTerraformDirectory checks if a directory exists and is suitable for Terraform module loading
 func validateTerraformDirectory(path string) error {
 	info, err := os.Stat(path)
@@ -52,8 +66,31 @@ func validateTerraformDirectory(path string) error {
 	return nil
 }
 
+// findTerraformModules recursively searches for directories containing Terraform files
+func findTerraformModules(root string, recursive bool) ([]string, error) {
+	if !recursive {
+		// Non-recursive mode: just return the root directory if it has .tf files
+		if hasTerraformFiles(root) {
+			return []string{root}, nil
+		}
+		return []string{root}, nil // Return root even if no .tf files for backward compatibility
+	}
+
+	var modules []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && hasTerraformFiles(path) {
+			modules = append(modules, path)
+		}
+		return nil
+	})
+	return modules, err
+}
+
 // generateSBOM generates a Software Bill of Materials for a Terraform configuration
-func generateSBOM(configPath string) (*SBOM, error) {
+func generateSBOM(configPath string, recursive bool) (*SBOM, error) {
 	// Validate the configuration path exists
 	if err := validateTerraformDirectory(configPath); err != nil {
 		return nil, err
@@ -65,30 +102,37 @@ func generateSBOM(configPath string) (*SBOM, error) {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	// Load the Terraform module configuration
-	module, diags := tfconfig.LoadModule(absPath)
-	if diags.HasErrors() {
-		return nil, fmt.Errorf("failed to load Terraform module: %s", diags.Error())
+	// Find all Terraform module directories
+	moduleDirs, err := findTerraformModules(absPath, recursive)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find Terraform modules: %w", err)
 	}
 
-	// Create SBOM with extracted module information
+	// Create SBOM with initial structure
 	sbom := &SBOM{
 		Version:   "1.0",
 		Generated: time.Now().Format(time.RFC3339),
 		Tool:      "terraform-sbom",
-		Modules:   make([]ModuleInfo, len(module.ModuleCalls)),
+		Modules:   []ModuleInfo{},
 	}
 
-	// Convert each module call to ModuleInfo
-	i := 0
-	for _, moduleCall := range module.ModuleCalls {
-		sbom.Modules[i] = ModuleInfo{
-			Name:     moduleCall.Name,
-			Source:   moduleCall.Source,
-			Version:  moduleCall.Version,
-			Location: fmt.Sprintf("Module call at %s:%d", moduleCall.Pos.Filename, moduleCall.Pos.Line),
+	// Process each directory and collect all modules
+	for _, moduleDir := range moduleDirs {
+		module, diags := tfconfig.LoadModule(moduleDir)
+		if diags.HasErrors() {
+			return nil, fmt.Errorf("failed to load Terraform module from %s: %s", moduleDir, diags.Error())
 		}
-		i++
+
+		// Convert each module call to ModuleInfo
+		for _, moduleCall := range module.ModuleCalls {
+			moduleInfo := ModuleInfo{
+				Name:     moduleCall.Name,
+				Source:   moduleCall.Source,
+				Version:  moduleCall.Version,
+				Location: fmt.Sprintf("Module call at %s:%d", moduleCall.Pos.Filename, moduleCall.Pos.Line),
+			}
+			sbom.Modules = append(sbom.Modules, moduleInfo)
+		}
 	}
 
 	return sbom, nil
@@ -300,9 +344,10 @@ func generateOutputFilename(baseOutput, format string) string {
 
 func main() {
 	var (
-		format  = flag.String("f", "json", "Output format(s) - comma-separated (json, xml, spdx, cyclonedx)")
-		output  = flag.String("o", "", "Output file path base (extensions added automatically)")
-		verbose = flag.Bool("v", false, "Verbose output")
+		format    = flag.String("f", "json", "Output format(s) - comma-separated (json, xml, spdx, cyclonedx)")
+		output    = flag.String("o", "", "Output file path base (extensions added automatically)")
+		verbose   = flag.Bool("v", false, "Verbose output")
+		recursive = flag.Bool("r", false, "Recursively scan for Terraform modules")
 	)
 	flag.Parse()
 
@@ -312,7 +357,9 @@ func main() {
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nArguments:\n")
 		fmt.Fprintf(os.Stderr, "  terraform-directory: Directory containing Terraform configuration files\n")
-		fmt.Fprintf(os.Stderr, "\nExample: %s -f json -o sbom.json ./terraform\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  %s -f json -o sbom.json ./terraform\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -r -f spdx -o sbom ./project    # Recursively scan all modules\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -329,7 +376,7 @@ func main() {
 		fmt.Printf("Output formats: %s\n", strings.Join(formats, ", "))
 	}
 
-	sbom, err := generateSBOM(configPath)
+	sbom, err := generateSBOM(configPath, *recursive)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
