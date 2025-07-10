@@ -79,8 +79,16 @@ func findTerraformModules(root string, recursive bool) ([]string, error) {
 	var modules []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return err
+			// Log the error and continue walking instead of aborting
+			fmt.Fprintf(os.Stderr, "Warning: skipping %s due to error: %v\n", path, err)
+			return nil
 		}
+
+		// Skip hidden directories (e.g., .terraform, .git)
+		if d.IsDir() && strings.HasPrefix(d.Name(), ".") && path != root {
+			return filepath.SkipDir
+		}
+
 		if d.IsDir() && hasTerraformFiles(path) {
 			modules = append(modules, path)
 		}
