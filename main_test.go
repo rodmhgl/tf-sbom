@@ -202,8 +202,8 @@ func TestGenerateSBOM(t *testing.T) {
 		}
 	})
 
-	// Test with valid but empty directory
-	t.Run("empty directory", func(t *testing.T) {
+	// Test with valid but empty directory (non-recursive)
+	t.Run("empty directory non-recursive", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "test_terraform_*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
@@ -217,6 +217,115 @@ func TestGenerateSBOM(t *testing.T) {
 
 		if len(sbom.Modules) != 0 {
 			t.Errorf("len(sbom.Modules) = %v, want 0", len(sbom.Modules))
+		}
+
+		// Verify SBOM structure is still valid
+		if sbom.Version != "1.0" {
+			t.Errorf("sbom.Version = %v, want '1.0'", sbom.Version)
+		}
+		if sbom.Tool != "terraform-sbom" {
+			t.Errorf("sbom.Tool = %v, want 'terraform-sbom'", sbom.Tool)
+		}
+		if sbom.Generated == "" {
+			t.Error("sbom.Generated should not be empty")
+		}
+	})
+
+	// Test with valid but empty directory (recursive)
+	t.Run("empty directory recursive", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_recursive_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create some empty subdirectories to ensure recursive scan doesn't find anything
+		emptySubDirs := []string{"subdir1", "subdir2", "deep/nested/empty"}
+		for _, subDir := range emptySubDirs {
+			err = os.MkdirAll(filepath.Join(tmpDir, subDir), 0755)
+			if err != nil {
+				t.Fatalf("failed to create empty subdirectory %s: %v", subDir, err)
+			}
+		}
+
+		sbom, err := generateSBOM(tmpDir, true)
+		if err != nil {
+			t.Fatalf("generateSBOM() = %v, want nil", err)
+		}
+
+		if len(sbom.Modules) != 0 {
+			t.Errorf("len(sbom.Modules) = %v, want 0", len(sbom.Modules))
+		}
+
+		// Verify SBOM structure is still valid
+		if sbom.Version != "1.0" {
+			t.Errorf("sbom.Version = %v, want '1.0'", sbom.Version)
+		}
+		if sbom.Tool != "terraform-sbom" {
+			t.Errorf("sbom.Tool = %v, want 'terraform-sbom'", sbom.Tool)
+		}
+		if sbom.Generated == "" {
+			t.Error("sbom.Generated should not be empty")
+		}
+	})
+
+	// Test empty directory with non-tf files (both recursive modes)
+	t.Run("directory with non-tf files", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_non_tf_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create various non-terraform files
+		nonTfFiles := map[string]string{
+			"README.md":    "# Project Documentation",
+			"package.json": `{"name": "test"}`,
+			"Dockerfile":   "FROM alpine:latest",
+			"config.yaml":  "key: value",
+			"script.sh":    "#!/bin/bash\necho hello",
+		}
+
+		for filename, content := range nonTfFiles {
+			err = os.WriteFile(filepath.Join(tmpDir, filename), []byte(content), 0644)
+			if err != nil {
+				t.Fatalf("failed to create file %s: %v", filename, err)
+			}
+		}
+
+		// Create subdirectory with non-tf files
+		subDir := filepath.Join(tmpDir, "subdir")
+		err = os.MkdirAll(subDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create subdirectory: %v", err)
+		}
+
+		err = os.WriteFile(filepath.Join(subDir, "notes.txt"), []byte("Some notes"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create file in subdirectory: %v", err)
+		}
+
+		// Test non-recursive
+		sbomNonRecursive, err := generateSBOM(tmpDir, false)
+		if err != nil {
+			t.Fatalf("generateSBOM(recursive=false) = %v, want nil", err)
+		}
+		if len(sbomNonRecursive.Modules) != 0 {
+			t.Errorf("non-recursive len(sbom.Modules) = %v, want 0", len(sbomNonRecursive.Modules))
+		}
+
+		// Test recursive
+		sbomRecursive, err := generateSBOM(tmpDir, true)
+		if err != nil {
+			t.Fatalf("generateSBOM(recursive=true) = %v, want nil", err)
+		}
+		if len(sbomRecursive.Modules) != 0 {
+			t.Errorf("recursive len(sbom.Modules) = %v, want 0", len(sbomRecursive.Modules))
+		}
+
+		// Both should produce identical results for directories without .tf files
+		if sbomNonRecursive.Version != sbomRecursive.Version {
+			t.Error("SBOM versions should be identical for non-recursive vs recursive on empty directories")
 		}
 	})
 
@@ -732,6 +841,422 @@ resource "aws_instance" "example" {
 			t.Errorf("error message = %v, want 'path must be a directory containing Terraform files'", err.Error())
 		}
 	})
+
+	// Test recursive scan with unreadable directories
+	t.Run("recursive scan with unreadable directory", func(t *testing.T) {
+		if os.Getuid() == 0 {
+			t.Skip("Skipping permission test when running as root")
+		}
+
+		tmpDir, err := os.MkdirTemp("", "test_terraform_unreadable_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create a readable directory with terraform config
+		readableDir := filepath.Join(tmpDir, "readable")
+		err = os.MkdirAll(readableDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create readable directory: %v", err)
+		}
+
+		readableConfig := `
+module "readable_module" {
+  source = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+}
+`
+		err = os.WriteFile(filepath.Join(readableDir, "main.tf"), []byte(readableConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write readable config: %v", err)
+		}
+
+		// Create an unreadable directory
+		unreadableDir := filepath.Join(tmpDir, "unreadable")
+		err = os.MkdirAll(unreadableDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create unreadable directory: %v", err)
+		}
+
+		// Make the directory unreadable
+		err = os.Chmod(unreadableDir, 0000)
+		if err != nil {
+			t.Fatalf("failed to change directory permissions: %v", err)
+		}
+		defer os.Chmod(unreadableDir, 0755) // Restore permissions for cleanup
+
+		// Capture stderr to check for warning messages
+		origStderr := os.Stderr
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatalf("failed to create pipe: %v", err)
+		}
+		os.Stderr = w
+
+		// Test recursive scan (should continue despite unreadable directory)
+		sbom, err := generateSBOM(tmpDir, true)
+
+		// Restore stderr
+		w.Close()
+		os.Stderr = origStderr
+
+		// Read captured stderr
+		stderrOutput := make([]byte, 1024)
+		n, _ := r.Read(stderrOutput)
+		r.Close()
+		stderrStr := string(stderrOutput[:n])
+
+		// Should succeed and find the readable module
+		if err != nil {
+			t.Fatalf("generateSBOM() = %v, want nil", err)
+		}
+
+		if len(sbom.Modules) != 1 {
+			t.Errorf("len(sbom.Modules) = %v, want 1", len(sbom.Modules))
+		}
+
+		if sbom.Modules[0].Name != "readable_module" {
+			t.Errorf("module name = %v, want 'readable_module'", sbom.Modules[0].Name)
+		}
+
+		// Should have warning message in stderr
+		if !strings.Contains(stderrStr, "Warning: skipping") {
+			t.Errorf("Expected warning message in stderr, got: %s", stderrStr)
+		}
+	})
+
+	// Test recursive scan skips hidden directories
+	t.Run("recursive scan skips hidden directories", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_hidden_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create a normal directory with terraform config
+		normalDir := filepath.Join(tmpDir, "normal")
+		err = os.MkdirAll(normalDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create normal directory: %v", err)
+		}
+
+		normalConfig := `
+module "normal_module" {
+  source = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+}
+`
+		err = os.WriteFile(filepath.Join(normalDir, "main.tf"), []byte(normalConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write normal config: %v", err)
+		}
+
+		// Create hidden directories that should be skipped
+		hiddenDirs := []string{".terraform", ".git", ".vscode", ".idea"}
+		for _, hiddenDir := range hiddenDirs {
+			dir := filepath.Join(tmpDir, hiddenDir)
+			err = os.MkdirAll(dir, 0755)
+			if err != nil {
+				t.Fatalf("failed to create hidden directory %s: %v", hiddenDir, err)
+			}
+
+			// Add terraform files to hidden directories (should be ignored)
+			hiddenConfig := `
+module "hidden_module" {
+  source = "should-be-ignored"
+}
+`
+			err = os.WriteFile(filepath.Join(dir, "main.tf"), []byte(hiddenConfig), 0644)
+			if err != nil {
+				t.Fatalf("failed to write hidden config: %v", err)
+			}
+		}
+
+		// Create nested hidden directory
+		nestedHidden := filepath.Join(tmpDir, "normal", ".terraform", "modules")
+		err = os.MkdirAll(nestedHidden, 0755)
+		if err != nil {
+			t.Fatalf("failed to create nested hidden directory: %v", err)
+		}
+
+		nestedConfig := `
+module "nested_hidden" {
+  source = "should-also-be-ignored"
+}
+`
+		err = os.WriteFile(filepath.Join(nestedHidden, "main.tf"), []byte(nestedConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write nested hidden config: %v", err)
+		}
+
+		// Test recursive scan
+		sbom, err := generateSBOM(tmpDir, true)
+		if err != nil {
+			t.Fatalf("generateSBOM() = %v, want nil", err)
+		}
+
+		// Should only find the normal module, not any from hidden directories
+		if len(sbom.Modules) != 1 {
+			t.Errorf("len(sbom.Modules) = %v, want 1", len(sbom.Modules))
+		}
+
+		if sbom.Modules[0].Name != "normal_module" {
+			t.Errorf("module name = %v, want 'normal_module'", sbom.Modules[0].Name)
+		}
+
+		// Verify no hidden modules were found
+		for _, module := range sbom.Modules {
+			if module.Name == "hidden_module" || module.Name == "nested_hidden" {
+				t.Errorf("Found module from hidden directory: %s", module.Name)
+			}
+		}
+	})
+
+	// Test when root directory itself starts with dot
+	t.Run("root directory starting with dot", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create a subdirectory that starts with dot to be our "root"
+		dotRoot := filepath.Join(tmpDir, ".myproject")
+		err = os.MkdirAll(dotRoot, 0755)
+		if err != nil {
+			t.Fatalf("failed to create dot root directory: %v", err)
+		}
+
+		// Add terraform config to the dot root
+		rootConfig := `
+module "root_module" {
+  source = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+}
+`
+		err = os.WriteFile(filepath.Join(dotRoot, "main.tf"), []byte(rootConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write root config: %v", err)
+		}
+
+		// Test recursive scan starting from dot directory
+		sbom, err := generateSBOM(dotRoot, true)
+		if err != nil {
+			t.Fatalf("generateSBOM() = %v, want nil", err)
+		}
+
+		// Should find the module in the root dot directory
+		if len(sbom.Modules) != 1 {
+			t.Errorf("len(sbom.Modules) = %v, want 1", len(sbom.Modules))
+		}
+
+		if sbom.Modules[0].Name != "root_module" {
+			t.Errorf("module name = %v, want 'root_module'", sbom.Modules[0].Name)
+		}
+	})
+}
+
+func TestHasTerraformFiles(t *testing.T) {
+	// Test with directory containing .tf files
+	t.Run("directory with tf files", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_has_tf_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create .tf file
+		err = os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# test"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create .tf file: %v", err)
+		}
+
+		if !hasTerraformFiles(tmpDir) {
+			t.Error("hasTerraformFiles() = false, want true for directory with .tf files")
+		}
+	})
+
+	// Test with directory containing only non-.tf files
+	t.Run("directory without tf files", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_no_tf_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create non-.tf files
+		err = os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("# test"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create README file: %v", err)
+		}
+
+		err = os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte("{}"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create JSON file: %v", err)
+		}
+
+		if hasTerraformFiles(tmpDir) {
+			t.Error("hasTerraformFiles() = true, want false for directory without .tf files")
+		}
+	})
+
+	// Test with empty directory
+	t.Run("empty directory", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_empty_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		if hasTerraformFiles(tmpDir) {
+			t.Error("hasTerraformFiles() = true, want false for empty directory")
+		}
+	})
+
+	// Test with non-existent directory
+	t.Run("non-existent directory", func(t *testing.T) {
+		if hasTerraformFiles("/path/that/does/not/exist") {
+			t.Error("hasTerraformFiles() = true, want false for non-existent directory")
+		}
+	})
+
+	// Test with unreadable directory
+	t.Run("unreadable directory", func(t *testing.T) {
+		if os.Getuid() == 0 {
+			t.Skip("Skipping permission test when running as root")
+		}
+
+		tmpDir, err := os.MkdirTemp("", "test_unreadable_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create .tf file first
+		err = os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte("# test"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create .tf file: %v", err)
+		}
+
+		// Make directory unreadable
+		err = os.Chmod(tmpDir, 0000)
+		if err != nil {
+			t.Fatalf("failed to change directory permissions: %v", err)
+		}
+		defer os.Chmod(tmpDir, 0755) // Restore permissions for cleanup
+
+		if hasTerraformFiles(tmpDir) {
+			t.Error("hasTerraformFiles() = true, want false for unreadable directory")
+		}
+	})
+
+	// Test with directory containing subdirectories
+	t.Run("directory with subdirectories", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_subdirs_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create subdirectory
+		subDir := filepath.Join(tmpDir, "subdir")
+		err = os.MkdirAll(subDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create subdirectory: %v", err)
+		}
+
+		// Create .tf file in subdirectory (should not count)
+		err = os.WriteFile(filepath.Join(subDir, "main.tf"), []byte("# test"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create .tf file in subdirectory: %v", err)
+		}
+
+		if hasTerraformFiles(tmpDir) {
+			t.Error("hasTerraformFiles() = true, want false for directory with .tf files only in subdirectories")
+		}
+	})
+}
+
+func TestExportJSONErrors(t *testing.T) {
+	// Test write error by using a failing writer
+	t.Run("write error", func(t *testing.T) {
+		testSBOM := &SBOM{
+			Modules: []ModuleInfo{
+				{Name: "test", Source: "test", Version: "1.0", Location: "test"},
+			},
+		}
+
+		// Use a writer that always fails
+		failingWriter := &failingWriter{}
+		err := exportJSON(testSBOM, failingWriter)
+		if err == nil {
+			t.Error("exportJSON() = nil, want error for failing writer")
+		}
+		if !strings.Contains(err.Error(), "failed to encode SBOM as JSON") {
+			t.Errorf("error message = %v, want 'failed to encode SBOM as JSON'", err.Error())
+		}
+	})
+}
+
+func TestExportXMLErrors(t *testing.T) {
+	// Test XML header write error
+	t.Run("XML header write error", func(t *testing.T) {
+		testSBOM := &SBOM{
+			Modules: []ModuleInfo{
+				{Name: "test", Source: "test", Version: "1.0", Location: "test"},
+			},
+		}
+
+		// Use a writer that always fails
+		failingWriter := &failingWriter{}
+		err := exportXML(testSBOM, failingWriter)
+		if err == nil {
+			t.Error("exportXML() = nil, want error for failing writer")
+		}
+		if !strings.Contains(err.Error(), "failed to write XML header") {
+			t.Errorf("error message = %v, want 'failed to write XML header'", err.Error())
+		}
+	})
+
+	// Test XML encoding error by using a failing writer after header
+	t.Run("XML encoding error", func(t *testing.T) {
+		testSBOM := &SBOM{
+			Modules: []ModuleInfo{
+				{Name: "test", Source: "test", Version: "1.0", Location: "test"},
+			},
+		}
+
+		// Use a writer that fails after the header is written
+		headerWrittenWriter := &headerWrittenFailingWriter{}
+		err := exportXML(testSBOM, headerWrittenWriter)
+		if err == nil {
+			t.Error("exportXML() = nil, want error for failing writer")
+		}
+		if !strings.Contains(err.Error(), "failed to encode SBOM as XML") {
+			t.Errorf("error message = %v, want 'failed to encode SBOM as XML'", err.Error())
+		}
+	})
+}
+
+// failingWriter is a writer that always returns an error
+type failingWriter struct{}
+
+func (fw *failingWriter) Write(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("write operation failed")
+}
+
+// headerWrittenFailingWriter allows the XML header to be written but fails on subsequent writes
+type headerWrittenFailingWriter struct {
+	headerWritten bool
+}
+
+func (hw *headerWrittenFailingWriter) Write(p []byte) (n int, err error) {
+	if !hw.headerWritten && string(p) == xml.Header {
+		hw.headerWritten = true
+		return len(p), nil
+	}
+	return 0, fmt.Errorf("write operation failed after header")
 }
 
 func TestExportSBOM(t *testing.T) {
