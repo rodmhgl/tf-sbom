@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
@@ -276,12 +277,16 @@ func exportSBOM(sbom *SBOM, format string, outputPath string) error {
 		return exportJSON(sbom, file)
 	case "xml":
 		return exportXML(sbom, file)
+	case "csv":
+		return exportCSV(sbom, file)
+	case "tsv":
+		return exportTSV(sbom, file)
 	case "spdx":
 		return exportSPDX(sbom, file)
 	case "cyclonedx":
 		return exportCycloneDX(sbom, file)
 	default:
-		return fmt.Errorf("unsupported format: %s (supported: json, xml, spdx, cyclonedx)", format)
+		return fmt.Errorf("unsupported format: %s (supported: json, xml, csv, tsv, spdx, cyclonedx)", format)
 	}
 }
 
@@ -314,6 +319,51 @@ func exportXML(sbom *SBOM, writer io.Writer) error {
 	return nil
 }
 
+// exportCSV exports SBOM as CSV to the provided writer
+func exportCSV(sbom *SBOM, writer io.Writer) error {
+	csvWriter := csv.NewWriter(writer)
+	defer csvWriter.Flush()
+
+	// Write header row
+	headers := []string{"Name", "Source", "Version", "Location"}
+	if err := csvWriter.Write(headers); err != nil {
+		return fmt.Errorf("failed to write CSV headers: %w", err)
+	}
+
+	// Write data rows
+	for _, module := range sbom.Modules {
+		record := []string{module.Name, module.Source, module.Version, module.Location}
+		if err := csvWriter.Write(record); err != nil {
+			return fmt.Errorf("failed to write CSV record: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// exportTSV exports SBOM as TSV (tab-separated values) to the provided writer
+func exportTSV(sbom *SBOM, writer io.Writer) error {
+	csvWriter := csv.NewWriter(writer)
+	csvWriter.Comma = '\t' // Use tab separator for TSV
+	defer csvWriter.Flush()
+
+	// Write header row
+	headers := []string{"Name", "Source", "Version", "Location"}
+	if err := csvWriter.Write(headers); err != nil {
+		return fmt.Errorf("failed to write TSV headers: %w", err)
+	}
+
+	// Write data rows
+	for _, module := range sbom.Modules {
+		record := []string{module.Name, module.Source, module.Version, module.Location}
+		if err := csvWriter.Write(record); err != nil {
+			return fmt.Errorf("failed to write TSV record: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // generateOutputFilename creates appropriate output filename based on format and base output path
 func generateOutputFilename(baseOutput, format string) string {
 	if baseOutput == "" {
@@ -323,6 +373,10 @@ func generateOutputFilename(baseOutput, format string) string {
 			return "sbom.json"
 		case "xml":
 			return "sbom.xml"
+		case "csv":
+			return "sbom.csv"
+		case "tsv":
+			return "sbom.tsv"
 		case "spdx":
 			return "sbom.spdx.json"
 		case "cyclonedx":
@@ -341,6 +395,10 @@ func generateOutputFilename(baseOutput, format string) string {
 		return base + ".json"
 	case "xml":
 		return base + ".xml"
+	case "csv":
+		return base + ".csv"
+	case "tsv":
+		return base + ".tsv"
 	case "spdx":
 		return base + ".spdx.json"
 	case "cyclonedx":
@@ -352,7 +410,7 @@ func generateOutputFilename(baseOutput, format string) string {
 
 func main() {
 	var (
-		format    = flag.String("f", "json", "Output format(s) - comma-separated (json, xml, spdx, cyclonedx)")
+		format    = flag.String("f", "json", "Output format(s) - comma-separated (json, xml, csv, tsv, spdx, cyclonedx)")
 		output    = flag.String("o", "", "Output file path base (extensions added automatically)")
 		verbose   = flag.Bool("v", false, "Verbose output")
 		recursive = flag.Bool("r", false, "Recursively scan for Terraform modules")
