@@ -455,6 +455,254 @@ module "long_module_name_with_many_underscores_and_dashes" {
 		}
 	})
 
+	// Test recursive=true with nested modules
+	t.Run("recursive scan with nested modules", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_recursive_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create nested directory structure with Terraform files
+		// Root level
+		rootConfig := `
+module "root_vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+}
+`
+		err = os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(rootConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write root config: %v", err)
+		}
+
+		// First level subdirectory
+		subDir1 := filepath.Join(tmpDir, "environments", "prod")
+		err = os.MkdirAll(subDir1, 0755)
+		if err != nil {
+			t.Fatalf("failed to create subdirectory: %v", err)
+		}
+
+		prodConfig := `
+module "prod_database" {
+  source = "terraform-aws-modules/rds/aws"
+  version = "~> 6.0"
+}
+
+module "prod_cache" {
+  source = "./../../modules/redis"
+}
+`
+		err = os.WriteFile(filepath.Join(subDir1, "main.tf"), []byte(prodConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write prod config: %v", err)
+		}
+
+		// Second level subdirectory
+		subDir2 := filepath.Join(tmpDir, "modules", "app")
+		err = os.MkdirAll(subDir2, 0755)
+		if err != nil {
+			t.Fatalf("failed to create app module directory: %v", err)
+		}
+
+		appConfig := `
+module "app_alb" {
+  source = "terraform-aws-modules/alb/aws"
+  version = "v8.7.0"
+}
+
+module "app_ecs" {
+  source = "git::https://github.com/example/ecs-module.git"
+  version = "v1.2.3"
+}
+`
+		err = os.WriteFile(filepath.Join(subDir2, "main.tf"), []byte(appConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write app config: %v", err)
+		}
+
+		// Empty directory (should be ignored)
+		emptyDir := filepath.Join(tmpDir, "empty")
+		err = os.MkdirAll(emptyDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create empty directory: %v", err)
+		}
+
+		// Directory with non-terraform files (should be ignored)
+		nonTfDir := filepath.Join(tmpDir, "docs")
+		err = os.MkdirAll(nonTfDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create docs directory: %v", err)
+		}
+		err = os.WriteFile(filepath.Join(nonTfDir, "README.md"), []byte("# Documentation"), 0644)
+		if err != nil {
+			t.Fatalf("failed to write README: %v", err)
+		}
+
+		// Test recursive scan
+		sbom, err := generateSBOM(tmpDir, true)
+		if err != nil {
+			t.Fatalf("generateSBOM() = %v, want nil", err)
+		}
+
+		// Should find modules from all directories with .tf files
+		expectedModules := 5 // root_vpc, prod_database, prod_cache, app_alb, app_ecs
+		if len(sbom.Modules) != expectedModules {
+			t.Errorf("len(sbom.Modules) = %v, want %v", len(sbom.Modules), expectedModules)
+		}
+
+		// Verify specific modules are found
+		moduleNames := make(map[string]bool)
+		for _, module := range sbom.Modules {
+			moduleNames[module.Name] = true
+		}
+
+		expectedNames := []string{"root_vpc", "prod_database", "prod_cache", "app_alb", "app_ecs"}
+		for _, name := range expectedNames {
+			if !moduleNames[name] {
+				t.Errorf("Expected module %s not found", name)
+			}
+		}
+	})
+
+	// Test recursive=false vs recursive=true comparison
+	t.Run("recursive vs non-recursive comparison", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_comparison_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Root level config
+		rootConfig := `
+module "root_module" {
+  source = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+}
+`
+		err = os.WriteFile(filepath.Join(tmpDir, "main.tf"), []byte(rootConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write root config: %v", err)
+		}
+
+		// Nested config
+		nestedDir := filepath.Join(tmpDir, "nested")
+		err = os.MkdirAll(nestedDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create nested directory: %v", err)
+		}
+
+		nestedConfig := `
+module "nested_module" {
+  source = "terraform-aws-modules/rds/aws"
+  version = "~> 6.0"
+}
+`
+		err = os.WriteFile(filepath.Join(nestedDir, "main.tf"), []byte(nestedConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write nested config: %v", err)
+		}
+
+		// Test non-recursive (should only find root module)
+		sbomNonRecursive, err := generateSBOM(tmpDir, false)
+		if err != nil {
+			t.Fatalf("generateSBOM(recursive=false) = %v, want nil", err)
+		}
+
+		if len(sbomNonRecursive.Modules) != 1 {
+			t.Errorf("non-recursive len(sbom.Modules) = %v, want 1", len(sbomNonRecursive.Modules))
+		}
+
+		if sbomNonRecursive.Modules[0].Name != "root_module" {
+			t.Errorf("non-recursive module name = %v, want 'root_module'", sbomNonRecursive.Modules[0].Name)
+		}
+
+		// Test recursive (should find both modules)
+		sbomRecursive, err := generateSBOM(tmpDir, true)
+		if err != nil {
+			t.Fatalf("generateSBOM(recursive=true) = %v, want nil", err)
+		}
+
+		if len(sbomRecursive.Modules) != 2 {
+			t.Errorf("recursive len(sbom.Modules) = %v, want 2", len(sbomRecursive.Modules))
+		}
+
+		// Verify both modules are found
+		moduleNames := make(map[string]bool)
+		for _, module := range sbomRecursive.Modules {
+			moduleNames[module.Name] = true
+		}
+
+		if !moduleNames["root_module"] {
+			t.Error("recursive scan should find root_module")
+		}
+		if !moduleNames["nested_module"] {
+			t.Error("recursive scan should find nested_module")
+		}
+	})
+
+	// Test recursive with deeply nested structure
+	t.Run("recursive scan with deep nesting", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_deep_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Create deeply nested structure: a/b/c/d/e
+		deepDir := filepath.Join(tmpDir, "a", "b", "c", "d", "e")
+		err = os.MkdirAll(deepDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create deep directory: %v", err)
+		}
+
+		// Add terraform file at the deepest level
+		deepConfig := `
+module "deep_module" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+  version = "~> 3.0"
+}
+`
+		err = os.WriteFile(filepath.Join(deepDir, "main.tf"), []byte(deepConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write deep config: %v", err)
+		}
+
+		// Also add a config at an intermediate level
+		midDir := filepath.Join(tmpDir, "a", "b")
+		midConfig := `
+module "mid_module" {
+  source = "./local/path"
+}
+`
+		err = os.WriteFile(filepath.Join(midDir, "variables.tf"), []byte(midConfig), 0644)
+		if err != nil {
+			t.Fatalf("failed to write mid config: %v", err)
+		}
+
+		// Test recursive scan finds both
+		sbom, err := generateSBOM(tmpDir, true)
+		if err != nil {
+			t.Fatalf("generateSBOM() = %v, want nil", err)
+		}
+
+		if len(sbom.Modules) != 2 {
+			t.Errorf("len(sbom.Modules) = %v, want 2", len(sbom.Modules))
+		}
+
+		moduleNames := make(map[string]bool)
+		for _, module := range sbom.Modules {
+			moduleNames[module.Name] = true
+		}
+
+		if !moduleNames["deep_module"] {
+			t.Error("Expected deep_module not found")
+		}
+		if !moduleNames["mid_module"] {
+			t.Error("Expected mid_module not found")
+		}
+	})
+
 	// Test with file instead of directory (should fail with clear error)
 	t.Run("file instead of directory", func(t *testing.T) {
 		// Create a temporary file
