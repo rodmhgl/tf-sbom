@@ -14,7 +14,7 @@ A Go tool for generating Software Bill of Materials (SBOM) from Terraform config
 ### Build from source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/rodmhgl/tf-sbom.git
 cd tf-sbom
 make build
 ```
