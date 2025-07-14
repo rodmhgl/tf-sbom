@@ -19,7 +19,7 @@ type Config struct {
 // ParseFlags parses command line flags and returns the configuration
 func ParseFlags() (*Config, error) {
 	var (
-		format    = flag.String("f", "json", "Output format(s) - comma-separated (json, xml, csv, tsv, spdx, cyclonedx)")
+		format    = flag.String("f", "json", "Output format(s) - comma-separated (json, xml, csv, tsv)")
 		output    = flag.String("o", "", "Output file path base (extensions added automatically)")
 		verbose   = flag.Bool("v", false, "Verbose output")
 		recursive = flag.Bool("r", false, "Recursively scan for Terraform modules")
@@ -57,5 +57,5 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  terraform-directory: Directory containing Terraform configuration files\n")
 	fmt.Fprintf(os.Stderr, "\nExamples:\n")
 	fmt.Fprintf(os.Stderr, "  %s -f json -o sbom.json ./terraform\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s -r -f spdx -o sbom ./project    # Recursively scan all modules\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s -r -f json -o sbom ./project    # Recursively scan all modules\n", os.Args[0])
 }

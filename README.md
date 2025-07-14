@@ -5,7 +5,7 @@ A Go tool for generating Software Bill of Materials (SBOM) from Terraform config
 ## Features
 
 - Analyzes Terraform configurations to identify module dependencies
-- Supports multiple output formats: JSON, XML, CSV, TSV, SPDX, CycloneDX
+- Supports multiple output formats: JSON, XML, CSV, TSV
 - Recursive scanning of Terraform modules
 - Command-line interface with verbose output options
 
@@ -33,7 +33,7 @@ make install
 
 ### Options
 
-- `-f string`: Output format(s) - comma-separated (json, xml, csv, tsv, spdx, cyclonedx) (default "json")
+- `-f string`: Output format(s) - comma-separated (json, xml, csv, tsv) (default "json")
 - `-o string`: Output file path base (extensions added automatically)
 - `-r`: Recursively scan for Terraform modules
 - `-v`: Verbose output
@@ -47,12 +47,12 @@ Generate JSON SBOM for a Terraform configuration:
 
 Generate multiple formats with custom output file:
 ```bash
-./terraform-sbom -f json,spdx,cyclonedx -o sbom ./terraform
+./terraform-sbom -f json,xml,csv -o sbom ./terraform
 ```
 
 Recursively scan all modules with verbose output:
 ```bash
-./terraform-sbom -r -v -f spdx -o sbom ./project
+./terraform-sbom -r -v -f json -o sbom ./project
 ```
 
 ## Development
@@ -106,8 +106,6 @@ make validate
 - **JSON**: Standard JSON format
 - **XML**: XML representation
 - **CSV/TSV**: Comma/Tab-separated values
-- **SPDX**: Software Package Data Exchange format
-- **CycloneDX**: OWASP CycloneDX format
 
 ## License
 
