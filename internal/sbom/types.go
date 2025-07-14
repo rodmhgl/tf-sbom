@@ -10,6 +10,7 @@ type ModuleInfo struct {
 	Source   string `json:"source" xml:"source"`
 	Version  string `json:"version" xml:"version"`
 	Location string `json:"location" xml:"location"`
+	Filename string `json:"filename" xml:"filename"`
 }
 
 // SBOM represents a Software Bill of Materials for Terraform configurations

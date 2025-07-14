@@ -20,12 +20,14 @@ func TestExportSBOM(t *testing.T) {
 				Source:   "terraform-aws-modules/vpc/aws",
 				Version:  "~> 5.0",
 				Location: "Module call at main.tf:10",
+				Filename: "main.tf",
 			},
 			{
 				Name:     "local-module",
 				Source:   "./modules/local",
 				Version:  "",
 				Location: "Module call at main.tf:20",
+				Filename: "main.tf",
 			},
 		},
 	}
@@ -143,6 +145,42 @@ func TestExportSBOM(t *testing.T) {
 		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 			t.Error("CSV file was not created")
 		}
+
+		// Verify CSV content includes Filename column
+		content, err := os.ReadFile(outputPath)
+		if err != nil {
+			t.Fatalf("failed to read CSV file: %v", err)
+		}
+
+		contentStr := string(content)
+		lines := strings.Split(strings.TrimSpace(contentStr), "\n")
+
+		// Verify header includes Filename
+		if len(lines) < 1 {
+			t.Fatal("CSV file should have at least a header line")
+		}
+		header := lines[0]
+		expectedHeader := "Name,Source,Version,Location,Filename"
+		if header != expectedHeader {
+			t.Errorf("CSV header = %q, want %q", header, expectedHeader)
+		}
+
+		// Verify data rows include filename values
+		if len(lines) < 3 {
+			t.Fatal("CSV file should have header + 2 data rows")
+		}
+
+		// Check first module row
+		firstRow := lines[1]
+		if !strings.Contains(firstRow, "main.tf") {
+			t.Errorf("First CSV row should contain filename 'main.tf', got: %q", firstRow)
+		}
+
+		// Check second module row
+		secondRow := lines[2]
+		if !strings.Contains(secondRow, "main.tf") {
+			t.Errorf("Second CSV row should contain filename 'main.tf', got: %q", secondRow)
+		}
 	})
 
 	t.Run("tsv format", func(t *testing.T) {
@@ -161,6 +199,42 @@ func TestExportSBOM(t *testing.T) {
 		// Verify file was created
 		if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 			t.Error("TSV file was not created")
+		}
+
+		// Verify TSV content includes Filename column
+		content, err := os.ReadFile(outputPath)
+		if err != nil {
+			t.Fatalf("failed to read TSV file: %v", err)
+		}
+
+		contentStr := string(content)
+		lines := strings.Split(strings.TrimSpace(contentStr), "\n")
+
+		// Verify header includes Filename
+		if len(lines) < 1 {
+			t.Fatal("TSV file should have at least a header line")
+		}
+		header := lines[0]
+		expectedHeader := "Name\tSource\tVersion\tLocation\tFilename"
+		if header != expectedHeader {
+			t.Errorf("TSV header = %q, want %q", header, expectedHeader)
+		}
+
+		// Verify data rows include filename values
+		if len(lines) < 3 {
+			t.Fatal("TSV file should have header + 2 data rows")
+		}
+
+		// Check first module row
+		firstRow := lines[1]
+		if !strings.Contains(firstRow, "main.tf") {
+			t.Errorf("First TSV row should contain filename 'main.tf', got: %q", firstRow)
+		}
+
+		// Check second module row
+		secondRow := lines[2]
+		if !strings.Contains(secondRow, "main.tf") {
+			t.Errorf("Second TSV row should contain filename 'main.tf', got: %q", secondRow)
 		}
 	})
 
