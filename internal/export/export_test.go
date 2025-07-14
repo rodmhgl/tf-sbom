@@ -120,7 +120,7 @@ func TestExportSBOM(t *testing.T) {
 			t.Error("Export() = nil, want error for unsupported format")
 		}
 
-		expectedError := "unsupported format: yaml (supported: json, xml, csv, tsv, spdx, cyclonedx)"
+		expectedError := "unsupported format: yaml (supported: json, xml, csv, tsv)"
 		if err.Error() != expectedError {
 			t.Errorf("error message = %v, want %v", err.Error(), expectedError)
 		}
@@ -241,8 +241,6 @@ func TestGenerateOutputFilename(t *testing.T) {
 		}{
 			{"json", "sbom.json"},
 			{"xml", "sbom.xml"},
-			{"spdx", "sbom.spdx.json"},
-			{"cyclonedx", "sbom.cyclonedx.json"},
 			{"unknown", "sbom.json"},
 			{"", "sbom.json"},
 		}
@@ -263,8 +261,6 @@ func TestGenerateOutputFilename(t *testing.T) {
 		}{
 			{"mysbom", "json", "mysbom.json"},
 			{"mysbom", "xml", "mysbom.xml"},
-			{"mysbom", "spdx", "mysbom.spdx.json"},
-			{"mysbom", "cyclonedx", "mysbom.cyclonedx.json"},
 			{"mysbom", "unknown", "mysbom.json"},
 			{"output", "json", "output.json"},
 		}
@@ -285,8 +281,6 @@ func TestGenerateOutputFilename(t *testing.T) {
 		}{
 			{"mysbom.txt", "json", "mysbom.json"},
 			{"mysbom.old", "xml", "mysbom.xml"},
-			{"mysbom.bak", "spdx", "mysbom.spdx.json"},
-			{"mysbom.tmp", "cyclonedx", "mysbom.cyclonedx.json"},
 			{"output.backup", "json", "output.json"},
 		}
 
@@ -306,8 +300,6 @@ func TestGenerateOutputFilename(t *testing.T) {
 		}{
 			{"/path/to/mysbom", "json", "/path/to/mysbom.json"},
 			{"./output/sbom", "xml", "./output/sbom.xml"},
-			{"../reports/terraform", "spdx", "../reports/terraform.spdx.json"},
-			{"dir/subdir/file.old", "cyclonedx", "dir/subdir/file.cyclonedx.json"},
 		}
 
 		for _, test := range tests {
@@ -326,8 +318,6 @@ func TestGenerateOutputFilename(t *testing.T) {
 		}{
 			{"file.tar.gz", "json", "file.tar.json"},
 			{"backup.2023.json", "xml", "backup.2023.xml"},
-			{"myfile.spdx.json", "spdx", "myfile.spdx.spdx.json"},
-			{"output.cyclonedx.json", "cyclonedx", "output.cyclonedx.cyclonedx.json"},
 		}
 
 		for _, test := range tests {
@@ -346,8 +336,6 @@ func TestGenerateOutputFilename(t *testing.T) {
 		}{
 			{".", "json", ".json"},
 			{".hidden", "xml", ".xml"},
-			{"file.", "spdx", "file.spdx.json"},
-			{"no-extension", "cyclonedx", "no-extension.cyclonedx.json"},
 		}
 
 		for _, test := range tests {

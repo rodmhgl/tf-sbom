@@ -39,12 +39,8 @@ func Export(s *sbom.SBOM, format string, outputPath string) error {
 		return CSV(s, file)
 	case "tsv":
 		return TSV(s, file)
-	case "spdx":
-		return SPDX(s, file)
-	case "cyclonedx":
-		return CycloneDX(s, file)
 	default:
-		return fmt.Errorf("unsupported format: %s (supported: json, xml, csv, tsv, spdx, cyclonedx)", format)
+		return fmt.Errorf("unsupported format: %s (supported: json, xml, csv, tsv)", format)
 	}
 }
 
@@ -61,10 +57,6 @@ func GenerateOutputFilename(baseOutput, format string) string {
 			return "sbom.csv"
 		case "tsv":
 			return "sbom.tsv"
-		case "spdx":
-			return "sbom.spdx.json"
-		case "cyclonedx":
-			return "sbom.cyclonedx.json"
 		default:
 			return "sbom.json"
 		}
@@ -83,10 +75,6 @@ func GenerateOutputFilename(baseOutput, format string) string {
 		return base + ".csv"
 	case "tsv":
 		return base + ".tsv"
-	case "spdx":
-		return base + ".spdx.json"
-	case "cyclonedx":
-		return base + ".cyclonedx.json"
 	default:
 		return base + ".json"
 	}
