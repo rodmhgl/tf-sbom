@@ -49,6 +49,7 @@ func Generate(configPath string, recursive bool) (*SBOM, error) {
 				Source:   moduleCall.Source,
 				Version:  moduleCall.Version,
 				Location: fmt.Sprintf("Module call at %s:%d", moduleCall.Pos.Filename, moduleCall.Pos.Line),
+				Filename: filepath.Base(moduleCall.Pos.Filename),
 			}
 			sbom.Modules = append(sbom.Modules, moduleInfo)
 		}

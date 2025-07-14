@@ -14,14 +14,14 @@ func exportDelimited(s *sbom.SBOM, writer io.Writer, separator rune, formatName 
 	csvWriter.Comma = separator
 
 	// Write header row
-	headers := []string{"Name", "Source", "Version", "Location"}
+	headers := []string{"Name", "Source", "Version", "Location", "Filename"}
 	if err := csvWriter.Write(headers); err != nil {
 		return fmt.Errorf("failed to write %s headers: %w", formatName, err)
 	}
 
 	// Write data rows
 	for _, module := range s.Modules {
-		record := []string{module.Name, module.Source, module.Version, module.Location}
+		record := []string{module.Name, module.Source, module.Version, module.Location, module.Filename}
 		if err := csvWriter.Write(record); err != nil {
 			return fmt.Errorf("failed to write %s record: %w", formatName, err)
 		}
