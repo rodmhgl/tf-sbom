@@ -12,6 +12,7 @@ func TestModuleInfoSerialization(t *testing.T) {
 		Source:   "github.com/example/test-module",
 		Version:  "1.0.0",
 		Location: "Module call at main.tf:10",
+		Filename: "main.tf",
 	}
 
 	// Test JSON serialization
@@ -38,6 +39,9 @@ func TestModuleInfoSerialization(t *testing.T) {
 		}
 		if unmarshaled.Location != moduleInfo.Location {
 			t.Errorf("Location = %v, want %v", unmarshaled.Location, moduleInfo.Location)
+		}
+		if unmarshaled.Filename != moduleInfo.Filename {
+			t.Errorf("Filename = %v, want %v", unmarshaled.Filename, moduleInfo.Filename)
 		}
 	})
 
@@ -66,6 +70,9 @@ func TestModuleInfoSerialization(t *testing.T) {
 		if unmarshaled.Location != moduleInfo.Location {
 			t.Errorf("Location = %v, want %v", unmarshaled.Location, moduleInfo.Location)
 		}
+		if unmarshaled.Filename != moduleInfo.Filename {
+			t.Errorf("Filename = %v, want %v", unmarshaled.Filename, moduleInfo.Filename)
+		}
 	})
 }
 
@@ -77,12 +84,14 @@ func TestSBOMSerialization(t *testing.T) {
 				Source:   "github.com/example/module1",
 				Version:  "1.0.0",
 				Location: "Module call at main.tf:10",
+				Filename: "main.tf",
 			},
 			{
 				Name:     "module2",
 				Source:   "github.com/example/module2",
 				Version:  "2.0.0",
 				Location: "Module call at main.tf:20",
+				Filename: "main.tf",
 			},
 		},
 	}

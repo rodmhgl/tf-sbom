@@ -21,7 +21,7 @@ func TestExportJSONErrors(t *testing.T) {
 	t.Run("write error", func(t *testing.T) {
 		testSBOM := &sbom.SBOM{
 			Modules: []sbom.ModuleInfo{
-				{Name: "test", Source: "test", Version: "1.0", Location: "test"},
+				{Name: "test", Source: "test", Version: "1.0", Location: "test", Filename: "test.tf"},
 			},
 		}
 
@@ -45,6 +45,7 @@ func TestExportJSON(t *testing.T) {
 				Source:   "terraform-aws-modules/vpc/aws",
 				Version:  "~> 5.0",
 				Location: "Module call at main.tf:10",
+				Filename: "main.tf",
 			},
 		},
 	}

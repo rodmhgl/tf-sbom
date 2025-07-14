@@ -368,6 +368,9 @@ module "long_module_name_with_many_underscores_and_dashes" {
 			if module.Location == "" {
 				t.Errorf("Module %s has empty location", module.Name)
 			}
+			if module.Filename == "" {
+				t.Errorf("Module %s has empty filename", module.Name)
+			}
 		}
 
 		if !moduleNames["special-chars_123"] {
@@ -867,6 +870,87 @@ module "root_module" {
 
 		if result.Modules[0].Name != "root_module" {
 			t.Errorf("module name = %v, want 'root_module'", result.Modules[0].Name)
+		}
+	})
+
+	// Test filename extraction from various file paths
+	t.Run("filename extraction from various paths", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test_terraform_filename_*")
+		if err != nil {
+			t.Fatalf("failed to create temp directory: %v", err)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		// Test different file names that might contain modules
+		testFiles := map[string]string{
+			"main.tf": `
+module "main_module" {
+  source = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+}`,
+			"variables.tf": `
+module "vars_module" {
+  source = "./modules/local"
+}`,
+			"outputs.tf": `
+module "outputs_module" {
+  source = "github.com/example/module"
+}`,
+		}
+
+		for filename, content := range testFiles {
+			err = os.WriteFile(filepath.Join(tmpDir, filename), []byte(content), 0644)
+			if err != nil {
+				t.Fatalf("failed to write %s: %v", filename, err)
+			}
+		}
+
+		result, err := Generate(tmpDir, false)
+		if err != nil {
+			t.Fatalf("Generate() = %v, want nil", err)
+		}
+
+		if len(result.Modules) != 3 {
+			t.Errorf("len(result.Modules) = %v, want 3", len(result.Modules))
+		}
+
+		// Verify each module has correct filename extracted
+		modulesByName := make(map[string]ModuleInfo)
+		for _, module := range result.Modules {
+			modulesByName[module.Name] = module
+
+			// Verify filename is not empty and is just the basename
+			if module.Filename == "" {
+				t.Errorf("Module %s has empty filename", module.Name)
+			}
+			if strings.Contains(module.Filename, "/") {
+				t.Errorf("Module %s filename should be basename only, got: %s", module.Name, module.Filename)
+			}
+		}
+
+		// Check specific filename extraction
+		if mainMod, exists := modulesByName["main_module"]; exists {
+			if mainMod.Filename != "main.tf" {
+				t.Errorf("main_module.Filename = %v, want 'main.tf'", mainMod.Filename)
+			}
+		} else {
+			t.Error("main_module not found")
+		}
+
+		if varsMod, exists := modulesByName["vars_module"]; exists {
+			if varsMod.Filename != "variables.tf" {
+				t.Errorf("vars_module.Filename = %v, want 'variables.tf'", varsMod.Filename)
+			}
+		} else {
+			t.Error("vars_module not found")
+		}
+
+		if outputsMod, exists := modulesByName["outputs_module"]; exists {
+			if outputsMod.Filename != "outputs.tf" {
+				t.Errorf("outputs_module.Filename = %v, want 'outputs.tf'", outputsMod.Filename)
+			}
+		} else {
+			t.Error("outputs_module not found")
 		}
 	})
 }
