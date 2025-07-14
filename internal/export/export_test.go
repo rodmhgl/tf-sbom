@@ -19,15 +19,15 @@ func TestExportSBOM(t *testing.T) {
 				Name:     "test-module",
 				Source:   "terraform-aws-modules/vpc/aws",
 				Version:  "~> 5.0",
-				Location: "Module call at main.tf:10",
-				Filename: "main.tf",
+				Location: "Module call at /project/main.tf:10",
+				Filename: "/project/main.tf",
 			},
 			{
 				Name:     "local-module",
 				Source:   "./modules/local",
 				Version:  "",
-				Location: "Module call at main.tf:20",
-				Filename: "main.tf",
+				Location: "Module call at /project/main.tf:20",
+				Filename: "/project/main.tf",
 			},
 		},
 	}
@@ -172,14 +172,14 @@ func TestExportSBOM(t *testing.T) {
 
 		// Check first module row
 		firstRow := lines[1]
-		if !strings.Contains(firstRow, "main.tf") {
-			t.Errorf("First CSV row should contain filename 'main.tf', got: %q", firstRow)
+		if !strings.Contains(firstRow, "/project/main.tf") {
+			t.Errorf("First CSV row should contain filename '/project/main.tf', got: %q", firstRow)
 		}
 
 		// Check second module row
 		secondRow := lines[2]
-		if !strings.Contains(secondRow, "main.tf") {
-			t.Errorf("Second CSV row should contain filename 'main.tf', got: %q", secondRow)
+		if !strings.Contains(secondRow, "/project/main.tf") {
+			t.Errorf("Second CSV row should contain filename '/project/main.tf', got: %q", secondRow)
 		}
 	})
 
@@ -227,14 +227,14 @@ func TestExportSBOM(t *testing.T) {
 
 		// Check first module row
 		firstRow := lines[1]
-		if !strings.Contains(firstRow, "main.tf") {
-			t.Errorf("First TSV row should contain filename 'main.tf', got: %q", firstRow)
+		if !strings.Contains(firstRow, "/project/main.tf") {
+			t.Errorf("First TSV row should contain filename '/project/main.tf', got: %q", firstRow)
 		}
 
 		// Check second module row
 		secondRow := lines[2]
-		if !strings.Contains(secondRow, "main.tf") {
-			t.Errorf("Second TSV row should contain filename 'main.tf', got: %q", secondRow)
+		if !strings.Contains(secondRow, "/project/main.tf") {
+			t.Errorf("Second TSV row should contain filename '/project/main.tf', got: %q", secondRow)
 		}
 	})
 

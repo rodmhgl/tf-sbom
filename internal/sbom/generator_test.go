@@ -919,35 +919,32 @@ module "outputs_module" {
 		for _, module := range result.Modules {
 			modulesByName[module.Name] = module
 
-			// Verify filename is not empty and is just the basename
+			// Verify filename is not empty and contains full path
 			if module.Filename == "" {
 				t.Errorf("Module %s has empty filename", module.Name)
 			}
-			if strings.Contains(module.Filename, "/") {
-				t.Errorf("Module %s filename should be basename only, got: %s", module.Name, module.Filename)
-			}
 		}
 
-		// Check specific filename extraction
+		// Check specific filename extraction - should contain full path ending with expected file
 		if mainMod, exists := modulesByName["main_module"]; exists {
-			if mainMod.Filename != "main.tf" {
-				t.Errorf("main_module.Filename = %v, want 'main.tf'", mainMod.Filename)
+			if !strings.HasSuffix(mainMod.Filename, "/main.tf") {
+				t.Errorf("main_module.Filename = %v, want path ending with '/main.tf'", mainMod.Filename)
 			}
 		} else {
 			t.Error("main_module not found")
 		}
 
 		if varsMod, exists := modulesByName["vars_module"]; exists {
-			if varsMod.Filename != "variables.tf" {
-				t.Errorf("vars_module.Filename = %v, want 'variables.tf'", varsMod.Filename)
+			if !strings.HasSuffix(varsMod.Filename, "/variables.tf") {
+				t.Errorf("vars_module.Filename = %v, want path ending with '/variables.tf'", varsMod.Filename)
 			}
 		} else {
 			t.Error("vars_module not found")
 		}
 
 		if outputsMod, exists := modulesByName["outputs_module"]; exists {
-			if outputsMod.Filename != "outputs.tf" {
-				t.Errorf("outputs_module.Filename = %v, want 'outputs.tf'", outputsMod.Filename)
+			if !strings.HasSuffix(outputsMod.Filename, "/outputs.tf") {
+				t.Errorf("outputs_module.Filename = %v, want path ending with '/outputs.tf'", outputsMod.Filename)
 			}
 		} else {
 			t.Error("outputs_module not found")

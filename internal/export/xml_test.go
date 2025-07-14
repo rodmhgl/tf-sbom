@@ -27,7 +27,7 @@ func TestExportXMLErrors(t *testing.T) {
 	t.Run("XML header write error", func(t *testing.T) {
 		testSBOM := &sbom.SBOM{
 			Modules: []sbom.ModuleInfo{
-				{Name: "test", Source: "test", Version: "1.0", Location: "test", Filename: "test.tf"},
+				{Name: "test", Source: "test", Version: "1.0", Location: "test", Filename: "/project/test.tf"},
 			},
 		}
 
@@ -46,7 +46,7 @@ func TestExportXMLErrors(t *testing.T) {
 	t.Run("XML encoding error", func(t *testing.T) {
 		testSBOM := &sbom.SBOM{
 			Modules: []sbom.ModuleInfo{
-				{Name: "test", Source: "test", Version: "1.0", Location: "test", Filename: "test.tf"},
+				{Name: "test", Source: "test", Version: "1.0", Location: "test", Filename: "/project/test.tf"},
 			},
 		}
 
@@ -69,15 +69,15 @@ func TestExportXML(t *testing.T) {
 				Name:     "test-module",
 				Source:   "terraform-aws-modules/vpc/aws",
 				Version:  "~> 5.0",
-				Location: "Module call at main.tf:10",
-				Filename: "main.tf",
+				Location: "Module call at /project/main.tf:10",
+				Filename: "/project/main.tf",
 			},
 			{
 				Name:     "local-module",
 				Source:   "./modules/local",
 				Version:  "",
-				Location: "Module call at main.tf:20",
-				Filename: "main.tf",
+				Location: "Module call at /project/main.tf:20",
+				Filename: "/project/main.tf",
 			},
 		},
 	}
@@ -245,8 +245,8 @@ func TestExportXML(t *testing.T) {
 					Name:     "single-module",
 					Source:   "github.com/example/module",
 					Version:  "v1.0.0",
-					Location: "Module call at test.tf:5",
-					Filename: "test.tf",
+					Location: "Module call at /project/test.tf:5",
+					Filename: "/project/test.tf",
 				},
 			},
 		}

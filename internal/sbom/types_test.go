@@ -11,8 +11,8 @@ func TestModuleInfoSerialization(t *testing.T) {
 		Name:     "test-module",
 		Source:   "github.com/example/test-module",
 		Version:  "1.0.0",
-		Location: "Module call at main.tf:10",
-		Filename: "main.tf",
+		Location: "Module call at /project/main.tf:10",
+		Filename: "/project/main.tf",
 	}
 
 	// Test JSON serialization
@@ -83,15 +83,15 @@ func TestSBOMSerialization(t *testing.T) {
 				Name:     "module1",
 				Source:   "github.com/example/module1",
 				Version:  "1.0.0",
-				Location: "Module call at main.tf:10",
-				Filename: "main.tf",
+				Location: "Module call at /project/main.tf:10",
+				Filename: "/project/main.tf",
 			},
 			{
 				Name:     "module2",
 				Source:   "github.com/example/module2",
 				Version:  "2.0.0",
-				Location: "Module call at main.tf:20",
-				Filename: "main.tf",
+				Location: "Module call at /project/main.tf:20",
+				Filename: "/project/main.tf",
 			},
 		},
 	}
